@@ -119,6 +119,29 @@ cmake -D ENABLE_QAT=1 ..
 
 For more information go to `overlaybd/src/overlaybd/zfile/README.md`.
 
+#### Building .deb packages for Ubuntu
+
+For Ubuntu systems, you can build .deb packages using the provided build script:
+
+```bash
+# Quick build for current architecture
+./build-deb.sh
+
+# Build for specific version
+./build-deb.sh -v 1.2.3 -c
+
+# Cross-platform builds using Docker
+./build-deb.sh -d -a amd64    # Build for amd64
+./build-deb.sh -d -a arm64    # Build for arm64
+
+# Or use CMake targets after configuration
+mkdir build && cd build
+cmake .. -DPACKAGE_VERSION=1.0.0 -DPACKAGE_RELEASE="$(date +%Y%m%d).ubuntu24.04"
+make deb  # Build only .deb package
+```
+
+The build script automatically handles dependency checking and supports both native and Docker-based cross-compilation for Ubuntu 24.04 (amd64/arm64).
+
 Finally, setup a systemd service for overlaybd-tcmu backstore.
 
 ```bash
