@@ -54,7 +54,7 @@ find_package(tcmu REQUIRED)
 find_package(yamlcpp)
 
 # OpenTelemetry
-find_package(opentelemetry-cpp REQUIRED)
+find_package(opentelemetry-cpp QUIET)
 if (NOT opentelemetry-cpp_FOUND)
   FetchContent_Declare(
     opentelemetry-cpp

@@ -22,7 +22,7 @@ jobs:
       shell: bash
       run: |
         sudo apt-get update -y
-        sudo apt-get install -y libgflags-dev libcurl4-openssl-dev libssl-dev libaio-dev libnl-3-dev libnl-genl-3-dev libzstd-dev libprotobuf-dev protobuf-compiler libgrpc++-dev libgrpc-dev
+        sudo apt-get install -y libgflags-dev libcurl4-openssl-dev libssl-dev libaio-dev libnl-3-dev libnl-genl-3-dev libzstd-dev libprotobuf-dev protobuf-compiler libgrpc++-dev libgrpc-dev protobuf-compiler-grpc
         sudo apt-get install -y uuid-dev libjson-c-dev libkmod-dev libsystemd-dev autoconf automake libtool libpci-dev nasm
         sudo apt-get install -y libext2fs-dev libyaml-cpp-dev
         wget https://github.com/google/googletest/archive/refs/tags/release-1.11.0.tar.gz
@@ -35,7 +35,7 @@ jobs:
         wget https://github.com/open-telemetry/opentelemetry-cpp/archive/refs/tags/v1.14.2.tar.gz
         tar -zxvf v1.14.2.tar.gz
         cd opentelemetry-cpp-1.14.2/
-        cmake -DCMAKE_BUILD_TYPE=Release -DWITH_OTLP_HTTP=ON -DWITH_OTLP_GRPC=ON -DBUILD_TESTING=OFF .
+        cmake -DCMAKE_BUILD_TYPE=Release -DWITH_OTLP_HTTP=ON -DWITH_OTLP_GRPC=ON -DBUILD_TESTING=OFF -DProtobuf_DIR=/usr/lib/x86_64-linux-gnu/cmake/protobuf .
         make -j$(nproc)
         sudo make install
 
