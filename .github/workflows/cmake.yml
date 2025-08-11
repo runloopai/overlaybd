@@ -25,41 +25,8 @@ jobs:
         sudo apt-get install -y libgflags-dev libcurl4-openssl-dev libssl-dev libaio-dev libnl-3-dev libnl-genl-3-dev libzstd-dev
         sudo apt-get install -y uuid-dev libjson-c-dev libkmod-dev libsystemd-dev autoconf automake libtool libpci-dev nasm
         sudo apt-get install -y libext2fs-dev libyaml-cpp-dev build-essential cmake git pkg-config
+        sudo apt-get install -y libgrpc++-dev libgrpc-dev protobuf-compiler libprotobuf-dev libabsl-dev
         
-        # Build and install abseil-cpp (required by Protocol Buffers 3.22+)
-        export MY_INSTALL_DIR=/usr/local
-        git clone https://github.com/abseil/abseil-cpp.git
-        cd abseil-cpp
-        git checkout 20230125.3
-        mkdir build && cd build
-        cmake -DCMAKE_INSTALL_PREFIX=$MY_INSTALL_DIR \
-              -DCMAKE_CXX_STANDARD=17 \
-              -DABSL_BUILD_TESTING=OFF \
-              -DABSL_USE_GOOGLETEST_HEAD=OFF \
-              -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-              -DABSL_ENABLE_INSTALL=ON \
-              ..
-        make -j$(nproc)
-        sudo make install
-        cd ../..
-        
-        # Build and install gRPC from source
-        git clone --recurse-submodules -b v1.60.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc
-        cd grpc
-        mkdir -p cmake/build
-        cd cmake/build
-        cmake -DgRPC_INSTALL=ON \
-              -DgRPC_BUILD_TESTS=OFF \
-              -DCMAKE_CXX_STANDARD=17 \
-              -DCMAKE_INSTALL_PREFIX=$MY_INSTALL_DIR \
-              -DCMAKE_PREFIX_PATH=$MY_INSTALL_DIR \
-              -DgRPC_ABSL_PROVIDER=package \
-              -DgRPC_SSL_PROVIDER=package \
-              -DCMAKE_BUILD_TYPE=Release \
-              ../..
-        make -j$(nproc)
-        sudo make install
-        cd ../../..
         
         wget https://github.com/google/googletest/archive/refs/tags/release-1.11.0.tar.gz
         tar -zxvf release-1.11.0.tar.gz
@@ -76,10 +43,8 @@ jobs:
               -DWITH_OTLP_HTTP=ON \
               -DWITH_OTLP_GRPC=ON \
               -DBUILD_TESTING=OFF \
-              -DCMAKE_PREFIX_PATH=/usr/local \
               -DCMAKE_CXX_STANDARD=17 \
               -DWITH_ABSEIL=ON \
-              -DOTELCPP_PROTO_PATH=/usr/local \
               ..
         make -j$(nproc)
         sudo make install
