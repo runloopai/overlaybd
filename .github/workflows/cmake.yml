@@ -73,6 +73,7 @@ jobs:
               -DgRPC_ABSL_PROVIDER=package \
               -DgRPC_PROTOBUF_PROVIDER=package \
               -DgRPC_SSL_PROVIDER=package \
+              -Dabsl_DIR=$MY_INSTALL_DIR/lib/cmake/absl \
               ..
         make -j$(nproc)
         sudo make install
