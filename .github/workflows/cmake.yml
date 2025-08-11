@@ -67,7 +67,15 @@ jobs:
         wget https://github.com/open-telemetry/opentelemetry-cpp/archive/refs/tags/v1.14.2.tar.gz
         tar -zxvf v1.14.2.tar.gz
         cd opentelemetry-cpp-1.14.2/
-        cmake -DCMAKE_BUILD_TYPE=Release -DWITH_OTLP_HTTP=ON -DWITH_OTLP_GRPC=ON -DBUILD_TESTING=OFF -DCMAKE_PREFIX_PATH=/usr/local .
+        cmake -DCMAKE_BUILD_TYPE=Release \
+              -DWITH_OTLP_HTTP=ON \
+              -DWITH_OTLP_GRPC=ON \
+              -DBUILD_TESTING=OFF \
+              -DCMAKE_PREFIX_PATH=/usr/local \
+              -DCMAKE_CXX_STANDARD=17 \
+              -DWITH_ABSEIL=ON \
+              -Dabsl_DIR=/usr/local/lib/cmake/absl \
+              .
         make -j$(nproc)
         sudo make install
 
