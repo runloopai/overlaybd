@@ -37,6 +37,7 @@ jobs:
               -DABSL_BUILD_TESTING=OFF \
               -DABSL_USE_GOOGLETEST_HEAD=OFF \
               -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+              -DABSL_ENABLE_INSTALL=ON \
               ..
         make -j$(nproc)
         sudo make install
@@ -52,6 +53,7 @@ jobs:
               -DCMAKE_CXX_STANDARD=17 \
               -DCMAKE_INSTALL_PREFIX=$MY_INSTALL_DIR \
               -DCMAKE_PREFIX_PATH=$MY_INSTALL_DIR \
+              -DgRPC_ABSL_PROVIDER=package \
               ../..
         make -j$(nproc)
         sudo make install
@@ -67,6 +69,7 @@ jobs:
         wget https://github.com/open-telemetry/opentelemetry-cpp/archive/refs/tags/v1.14.2.tar.gz
         tar -zxvf v1.14.2.tar.gz
         cd opentelemetry-cpp-1.14.2/
+        mkdir build && cd build
         cmake -DCMAKE_BUILD_TYPE=Release \
               -DWITH_OTLP_HTTP=ON \
               -DWITH_OTLP_GRPC=ON \
@@ -74,10 +77,11 @@ jobs:
               -DCMAKE_PREFIX_PATH=/usr/local \
               -DCMAKE_CXX_STANDARD=17 \
               -DWITH_ABSEIL=ON \
-              -Dabsl_DIR=/usr/local/lib/cmake/absl \
-              .
+              -DOTELCPP_PROTO_PATH=/usr/local \
+              ..
         make -j$(nproc)
         sudo make install
+        cd ../../..
 
     - name: Create Build Environment
       run: cmake -E make_directory ${{github.workspace}}/build
