@@ -26,8 +26,23 @@ jobs:
         sudo apt-get install -y uuid-dev libjson-c-dev libkmod-dev libsystemd-dev autoconf automake libtool libpci-dev nasm
         sudo apt-get install -y libext2fs-dev libyaml-cpp-dev build-essential cmake git
         
-        # Build and install gRPC from source
+        # Build and install abseil-cpp (required by Protocol Buffers 3.22+)
         export MY_INSTALL_DIR=/usr/local
+        git clone https://github.com/abseil/abseil-cpp.git
+        cd abseil-cpp
+        git checkout 20230125.3
+        mkdir build && cd build
+        cmake -DCMAKE_INSTALL_PREFIX=$MY_INSTALL_DIR \
+              -DCMAKE_CXX_STANDARD=17 \
+              -DABSL_BUILD_TESTING=OFF \
+              -DABSL_USE_GOOGLETEST_HEAD=OFF \
+              -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+              ..
+        make -j$(nproc)
+        sudo make install
+        cd ../..
+        
+        # Build and install gRPC from source
         git clone --recurse-submodules -b v1.60.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc
         cd grpc
         mkdir -p cmake/build
@@ -36,6 +51,7 @@ jobs:
               -DgRPC_BUILD_TESTS=OFF \
               -DCMAKE_CXX_STANDARD=17 \
               -DCMAKE_INSTALL_PREFIX=$MY_INSTALL_DIR \
+              -DCMAKE_PREFIX_PATH=$MY_INSTALL_DIR \
               ../..
         make -j$(nproc)
         sudo make install
