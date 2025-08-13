@@ -39,6 +39,7 @@
 #include <photon/fs/virtual-file.h>
 #include <photon/fs/localfs.h>
 #include <photon/net/http/client.h>
+#include <photon/net/http/url.h>
 #include <photon/net/utils.h>
 #include <photon/net/security-context/tls-stream.h>
 #include <rapidjson/document.h>
@@ -126,9 +127,9 @@ public:
         return open(pathname, flags); // ignore mode
     }
 
-    RegistryFSImpl_v2(PasswordCB callback, const char *caFile, uint64_t timeout,
+    RegistryFSImpl_v2(PasswordCB callback, std::vector<ImageConfigNS::MirrorConfig> mirrors, const char *caFile, uint64_t timeout,
                       photon::net::TLSContext *ctx, const char *ua)
-        : m_callback(callback), m_caFile(caFile), m_timeout(timeout), m_tls_ctx(ctx),
+        : m_callback(callback), m_mirrors(std::move(mirrors)), m_caFile(caFile), m_timeout(timeout), m_tls_ctx(ctx),
           m_meta_size(kMinimalMetaLife), m_scope_token(kMinimalTokenLife),
           m_url_info(kMinimalAUrlLife) {
 
@@ -209,8 +210,35 @@ public:
     }
 
     UrlInfo* get_actual_url(const estring &url, uint64_t timeout, long &code) {
-
         Timeout tmo(timeout);
+        if (m_accelerate.empty() && !m_mirrors.empty()) {
+            // If p2p acceleration is not enabled, and mirrors are configured,
+            // check each mirror whose host matches, in order, until one of them succeeds.
+            URL parsed(url);
+            if (!parsed.empty()) {
+                // The URL was parsed successfully.
+                for (ImageConfigNS::MirrorConfig& mirror : m_mirrors) {
+                    if (mirror.host() == parsed.host_port()) {
+                        long mirror_code = 0;
+                        estring mirror_url = mirror.mirror() + std::string(parsed.path());
+                        Timeout mirrorTimeout(std::min(tmo.timeout(), mirror.timeoutMs() * 1000));
+                        LOG_INFO("trying mirror `", mirror_url, "` for original url `", url, "` with timeout=", mirrorTimeout.timeout_ms(), "ms");
+                        UrlInfo* info = get_actual_url_impl(mirror_url, mirrorTimeout, mirror_code);
+                        if (info != nullptr) {
+                            code = mirror_code;
+                            return info;
+                        }
+                    }
+                }
+                LOG_INFO("falling back to original url `", url, "`");
+            } else {
+                LOG_WARN("failed to parse url `", url, "`");
+            }
+        }
+        return get_actual_url_impl(url, tmo.timeout(), code);
+    }
+
+    UrlInfo* get_actual_url_impl(const estring &url, Timeout tmo, long &code) {
         estring authurl, scope;
         estring *token = nullptr;
 
@@ -317,6 +345,7 @@ public:
 
 protected:
     PasswordCB m_callback;
+    std::vector<ImageConfigNS::MirrorConfig> m_mirrors;
     estring m_accelerate;
     estring m_caFile;
     estring m_useragent;
@@ -533,7 +562,7 @@ inline IFile *RegistryFSImpl_v2::open(const char *pathname, int) {
     return file;
 }
 
-IFileSystem *new_registryfs_v2(PasswordCB callback, const char *caFile, uint64_t timeout,
+IFileSystem *new_registryfs_v2(PasswordCB callback, std::vector<ImageConfigNS::MirrorConfig> mirrors, const char *caFile, uint64_t timeout,
                                const char *cert_file, const char *key_file, const char *customized_ua) {
     if (!callback)
         LOG_ERROR_RETURN(EINVAL, nullptr, "password callback not set");
@@ -541,7 +570,7 @@ IFileSystem *new_registryfs_v2(PasswordCB callback, const char *caFile, uint64_t
     if (!ctx) {
         LOG_ERRNO_RETURN(0, nullptr, "failed to new tls context");
     }
-    return new RegistryFSImpl_v2(callback, caFile ? caFile : "", timeout, ctx, customized_ua);
+    return new RegistryFSImpl_v2(callback, std::move(mirrors), caFile ? caFile : "", timeout, ctx, customized_ua);
 }
 
 class RegistryUploader : public VirtualFile {
@@ -738,7 +767,7 @@ public:
         photon::init(photon::INIT_EVENT_DEFAULT, photon::INIT_IO_NONE);
         DEFER(photon::fini());
         m_upload_fs = new RegistryFSImpl_v2({this, &RegistryUploader::load_auth},
-                                            "", m_timeout, m_tls_ctx, nullptr);
+                                            {}, "", m_timeout, m_tls_ctx, nullptr);
         DEFER({ delete m_upload_fs; });
         m_http_client_ts = photon::now;
         ::posix_memalign(&m_upload_buf, 4096, 1024 * 1024);

@@ -15,6 +15,9 @@
 */
 
 #pragma once
+
+#include "../../config.h"
+
 #include <stdint.h>
 #include <string>
 #include <photon/common/callback.h>
@@ -29,6 +32,7 @@ using PasswordCB = Delegate<std::pair<std::string, std::string>, const char *>;
 
 extern "C" {
 photon::fs::IFileSystem *new_registryfs_v1(PasswordCB callback,
+                                           std::vector<ImageConfigNS::MirrorConfig> mirrors,
                                            const char *caFile = nullptr,
                                            uint64_t timeout = -1,
                                            const char *cert_file = nullptr,
@@ -36,6 +40,7 @@ photon::fs::IFileSystem *new_registryfs_v1(PasswordCB callback,
                                            const char *__ = nullptr);
 
 photon::fs::IFileSystem *new_registryfs_v2(PasswordCB callback,
+                                           std::vector<ImageConfigNS::MirrorConfig> mirrors,
                                            const char *caFile = nullptr,
                                            uint64_t timeout = -1,
                                            const char *cert_file = nullptr,
