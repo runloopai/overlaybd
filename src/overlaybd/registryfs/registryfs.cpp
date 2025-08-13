@@ -527,7 +527,7 @@ inline IFile *RegistryFSImpl::open(const char *pathname, int) {
     return file;
 }
 
-IFileSystem *new_registryfs_v1(PasswordCB callback, const char *caFile, uint64_t timeout,
+IFileSystem *new_registryfs_v1(PasswordCB callback, std::vector<ImageConfigNS::MirrorConfig> /*mirrors*/, const char *caFile, uint64_t timeout,
                                const char *cert_file, const char *key_file, const char *__) {
     if (!callback)
         LOG_ERROR_RETURN(EINVAL, nullptr, "password callback not set");

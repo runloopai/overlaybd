@@ -348,7 +348,7 @@ int ImageService::init() {
             registryfs_creator = new_registryfs_v2;
 
         global_fs.underlay_registryfs = registryfs_creator(
-            {this, &ImageService::reload_auth}, cafile, 30UL * 1000000,
+            {this, &ImageService::reload_auth}, global_conf.mirrors(), cafile, 30UL * 1000000,
             global_conf.certConfig().certFile().c_str(), global_conf.certConfig().keyFile().c_str(), global_conf.userAgent().c_str());
         if (global_fs.underlay_registryfs == nullptr) {
             LOG_ERROR_RETURN(0, -1, "create registryfs failed.");

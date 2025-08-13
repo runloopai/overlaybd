@@ -74,6 +74,14 @@ struct P2PConfig : public ConfigUtils::Config {
     APPCFG_PARA(address, std::string, "http://localhost:9731/accelerator");
 };
 
+struct MirrorConfig : public ConfigUtils::Config {
+    APPCFG_CLASS
+
+    APPCFG_PARA(host, std::string);
+    APPCFG_PARA(mirror, std::string);
+    APPCFG_PARA(timeoutMs, uint64_t, 200);
+};
+
 struct GzipCacheConfig : public ConfigUtils::Config {
     APPCFG_CLASS
 
@@ -146,6 +154,7 @@ struct GlobalConfig : public ConfigUtils::Config {
     APPCFG_PARA(enableAudit, bool, true);
     APPCFG_PARA(enableThread, bool, false);
     APPCFG_PARA(p2pConfig, P2PConfig);
+    APPCFG_PARA(mirrors, std::vector<MirrorConfig>);
     APPCFG_PARA(exporterConfig, ExporterConfig);
     APPCFG_PARA(auditPath, std::string, "/var/log/overlaybd-audit.log");
     APPCFG_PARA(registryFsVersion, std::string, "v2");
