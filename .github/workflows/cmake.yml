@@ -118,3 +118,10 @@ jobs:
       working-directory: ${{github.workspace}}/build
       shell: bash
       run: ctest -j8 --output-on-failure -C $BUILD_TYPE
+
+    - name: Breakpoint if tests failed
+      if: failure()
+      uses: namespacelabs/breakpoint-action@v0
+      with:
+        duration: 30m
+        authorized-users: dines-rl
