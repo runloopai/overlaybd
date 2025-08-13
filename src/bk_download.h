@@ -17,6 +17,7 @@
 #include <list>
 #include <string>
 #include <cstdint>
+#include <atomic>
 #include <photon/fs/filesystem.h>
 #include "overlaybd/otel/tracer_common.h"
 
@@ -45,7 +46,7 @@ public:
     }
     BkDownload(ISwitchFile *sw_file, photon::fs::IFile *src_file, size_t file_size,
                const std::string &dir, const std::string &digest, const std::string &url,
-               int &running, int32_t limit_MB_ps, int32_t try_cnt, uint32_t bs)
+               volatile int &running, int32_t limit_MB_ps, int32_t try_cnt, uint32_t bs)
         : dir(dir), try_cnt(try_cnt), sw_file(sw_file), src_file(src_file),
           file_size(file_size), digest(digest), url(url), running(running),
           limit_MB_ps(limit_MB_ps), block_size(bs) {
@@ -61,12 +62,12 @@ private:
     size_t file_size;
     std::string digest;
     std::string url;
-    int &running;
+    volatile int &running;
     int32_t limit_MB_ps;
     uint32_t block_size;
     bool force_download = false;
 };
 
-void bk_download_proc(std::list<BKDL::BkDownload *> &, uint64_t, int &);
+void bk_download_proc(std::list<BKDL::BkDownload *> &, uint64_t, volatile int &);
 
 } // namespace BKDL
