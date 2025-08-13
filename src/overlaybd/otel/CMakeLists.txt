@@ -15,6 +15,7 @@ set(WITH_EXAMPLES OFF CACHE BOOL "Build examples" FORCE)
 set(OPENTELEMETRY_INSTALL ON CACHE BOOL "Install OpenTelemetry" FORCE)
 set(WITH_OTLP_GRPC OFF CACHE BOOL "Build with OTLP GRPC" FORCE)
 set(WITH_OTLP_HTTP ON CACHE BOOL "Build with OTLP HTTP" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build with shared library" FORCE)
 
 FetchContent_MakeAvailable(opentelemetry-cpp)
 
