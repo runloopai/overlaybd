@@ -99,7 +99,7 @@ public:
     int open_lower_layer(IFile *&file, ImageConfigNS::LayerConfig &layer, int index);
 
     std::string m_exception;
-    int m_status = 0; // 0: not started, 1: running, -1 exit
+    volatile int m_status = 0; // 0: not started, 1: running, -1 exit
 
     size_t size;
     uint64_t num_lbas;

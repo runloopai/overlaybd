@@ -19,6 +19,7 @@
 #include <set>
 #include <string>
 #include <thread>
+#include <mutex>
 #include <sys/file.h>
 #include <photon/common/alog.h>
 #include <photon/common/alog-stdstring.h>
@@ -53,6 +54,7 @@ bool check_downloaded(const std::string &dir) {
     return false;
 }
 
+static std::mutex lock_files_mutex;
 static std::set<std::string> lock_files;
 
 void BkDownload::switch_to_local_file() {
@@ -188,6 +190,7 @@ bool BkDownload::download() {
 }
 
 bool BkDownload::lock_file() {
+    std::lock_guard<std::mutex> lock(lock_files_mutex);
     if (lock_files.find(dir) != lock_files.end()) {
         LOG_WARN("failed to lock download path:`", dir);
         return false;
@@ -197,6 +200,7 @@ bool BkDownload::lock_file() {
 }
 
 void BkDownload::unlock_file() {
+    std::lock_guard<std::mutex> lock(lock_files_mutex);
     lock_files.erase(dir);
 }
 
@@ -337,7 +341,7 @@ bool BkDownload::download_blob() {
     return true;
 }
 
-void bk_download_proc(std::list<BKDL::BkDownload *> &dl_list, uint64_t delay_sec, int &running) {
+void bk_download_proc(std::list<BKDL::BkDownload *> &dl_list, uint64_t delay_sec, volatile int &running) {
     auto tracer = overlaybd_otel::get_tracer("overlaybd");
     auto span = tracer->StartSpan("background_download_process");
     auto scope = tracer->WithActiveSpan(span);
