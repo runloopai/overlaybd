@@ -1,5 +1,6 @@
 set(SOURCE_OTEL
     tracer_common.cpp
+    context_storage.cpp
 )
 
 include(FetchContent)
@@ -24,6 +25,7 @@ set_target_properties(otel_lib PROPERTIES LINKER_LANGUAGE CXX)
 
 target_include_directories(otel_lib PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${PHOTON_INCLUDE_DIR}
     ${opentelemetry-cpp_SOURCE_DIR}/api/include
     ${opentelemetry-cpp_SOURCE_DIR}/sdk/include
     ${opentelemetry-cpp_SOURCE_DIR}/exporters/otlp/include

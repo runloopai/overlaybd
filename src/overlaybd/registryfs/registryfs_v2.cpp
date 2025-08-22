@@ -16,7 +16,6 @@
 #include "../../version.h"
 #include "registryfs.h"
 
-
 #include <cerrno>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -48,6 +47,8 @@
 #include <openssl/sha.h>
 #include <thread>
 #include <fcntl.h>
+
+#include "../otel/tracer_common.h"
 
 using namespace photon::fs;
 using namespace photon::net::http;
@@ -147,19 +148,19 @@ public:
         if (m_tls_ctx) delete m_tls_ctx;
     }
 
-    long get_data(const estring &url, off_t offset, size_t count, uint64_t timeout, HTTP_OP &op) {
+    long get_data(const estring &url, off_t offset, size_t count, uint64_t timeout, HTTP_OP &op) {        
         Timeout tmo(timeout);
         long ret = 0;
         UrlInfo *actual_info = m_url_info.acquire(url, [&]() -> UrlInfo * {
             return get_actual_url(url, tmo.timeout(), ret);
         });
 
-        if (actual_info == nullptr)
+        if (actual_info == nullptr) {
             return ret;
+        }
 
-        estring *actual_url = (estring*)&url;
-        if (actual_info->mode == UrlMode::Redirect)
-            actual_url = &actual_info->info;
+        estring *actual_url = (estring*)&actual_info->info;
+        
         // use p2p proxy
         estring accelerate_url;
         if (m_accelerate.size() > 0) {
@@ -167,6 +168,8 @@ public:
             actual_url = &accelerate_url;
             LOG_DEBUG("p2p_url: `", *actual_url);
         }
+
+        overlaybd_otel::GetTracer()->GetCurrentSpan()->SetAttribute("actual_url", *actual_url);
 
         op.req.reset(Verb::GET, *actual_url);
         // set token if needed
@@ -183,7 +186,6 @@ public:
             m_url_info.release(url);
             return ret;
         }
-
         m_url_info.release(url, true);
         LOG_ERROR_RETURN(0, ret, "Failed to fetch data ", VALUE(url), VALUE(op.status_code), VALUE(ret));
     }
@@ -287,7 +289,7 @@ public:
             return new UrlInfo{UrlMode::Redirect, location};
         }
         if (code == 200) {
-            UrlInfo *info = new UrlInfo{UrlMode::Self, ""};
+            UrlInfo *info = new UrlInfo{UrlMode::Self, url};
             if (authtype == AuthType::Bearer && token && !token->empty())
                 info->info = kBearerAuthPrefix + *token;
             else if (authtype == AuthType::Basic) {
@@ -475,6 +477,13 @@ public:
     }
 
     ssize_t preadv(const struct iovec *iov, int iovcnt, off_t offset) override {
+        auto tracer = overlaybd_otel::GetTracer();
+        auto span = tracer->StartSpan("registryfs_v2.preadv");
+        auto scope = tracer->WithActiveSpan(span);
+        span->SetAttribute("url", m_url);
+        span->SetAttribute("timeout_us", m_timeout);
+        span->SetAttribute("offset", offset);
+        
         if (m_filesize == 0) {
             struct stat stat;
             auto stret = fstat(&stat);
@@ -492,25 +501,36 @@ public:
         if (count + offset > filesize)
             count = filesize - offset;
         LOG_DEBUG("pulling blob from registry: ", VALUE(m_url), VALUE(offset), VALUE(count));
+        span->SetAttribute("count", count);
 
         HTTP_OP op;
         auto code = m_fs->get_data(m_url, offset, count, tmo.timeout(), op);
         if (code != 200 && code != 206) {
             ERRNO eno;
             if (tmo.expire() < photon::now) {
+                span->SetAttribute("error", true);
+                span->SetAttribute("reason", "timeout");
                 LOG_ERROR_RETURN(ETIMEDOUT, -1, "timed out in preadv ", VALUE(m_url), VALUE(offset));
             }
             if (retry--) {
                 LOG_WARN("failed to perform HTTP GET, going to retry ", VALUE(code), VALUE(offset),
                          VALUE(count), eno);
+                span->AddEvent("retry", {
+                    { "http.status", code },
+                    { "attempts_left", retry },
+                });
                 photon::thread_usleep(1000);
                 goto again;
             } else {
+                span->SetAttribute("error", true);
+                span->SetAttribute("http.status", code);
                 LOG_ERROR_RETURN(ENOENT, -1, "failed to perform HTTP GET ", VALUE(m_url),
                                  VALUE(offset));
             }
         }
-        return op.resp.readv(iov, iovcnt);
+        ssize_t bytes_read = op.resp.readv(iov, iovcnt);
+        span->SetAttribute("bytes_read", bytes_read);
+        return bytes_read;
     }
 
     int64_t get_length(uint64_t timeout = -1) {

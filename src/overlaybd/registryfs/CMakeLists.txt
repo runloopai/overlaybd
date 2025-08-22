@@ -8,3 +8,4 @@ target_include_directories(registryfs_lib PUBLIC
     ${rapidjson_SOURCE_DIR}/include
     ${PHOTON_INCLUDE_DIR}
 )
+target_link_libraries(registryfs_lib PRIVATE otel_lib)
