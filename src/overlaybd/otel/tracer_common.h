@@ -25,6 +25,6 @@ namespace overlaybd_otel {
 
 void InitTracer();
 void CleanupTracer();
-opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> get_tracer(std::string tracer_name);
+opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> GetTracer(opentelemetry::nostd::string_view tracer_name = "overlaybd");
 
 } // namespace overlaybd_otel
