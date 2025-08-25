@@ -1,7 +1,7 @@
-// Copyright The OpenTelemetry Authors
-// SPDX-License-Identifier: Apache-2.0
-
 #pragma once
+
+#define OPENTELEMETRY_ABI_VERSION_NO 2
+
 #include "opentelemetry/exporters/otlp/otlp_http_exporter_factory.h"
 #include "opentelemetry/exporters/otlp/otlp_http_exporter_options.h"
 #include "opentelemetry/nostd/shared_ptr.h"
@@ -20,11 +20,16 @@
 #include <iostream>
 #include <vector>
 
+#include <rapidjson/document.h>
+
 namespace overlaybd_otel {
 
-
 void InitTracer();
+
 void CleanupTracer();
+
 opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> GetTracer(opentelemetry::nostd::string_view tracer_name = "overlaybd");
+
+opentelemetry::context::Context ExtractTraceContext(const rapidjson::Document& config);
 
 } // namespace overlaybd_otel
