@@ -35,6 +35,7 @@
 #include "switch_file.h"
 #include "overlaybd/gzip/gz.h"
 #include "overlaybd/gzindex/gzfile.h"
+#include "overlaybd/otel/tracer_common.h"
 #include "overlaybd/tar/tar_file.h"
 
 #define PARALLEL_LOAD_INDEX 32
@@ -217,8 +218,10 @@ void ImageFile::start_bk_dl_thread() {
     uint64_t delay_sec = (rand() % extra_range) + conf.download().delay();
     LOG_INFO("background download is enabled, delay `, maxMBps `, tryCnt `, blockSize `", delay_sec,
              conf.download().maxMBps(), conf.download().tryCnt(), conf.download().blockSize());
+    opentelemetry::trace::SpanContext linkContext = overlaybd_otel::GetTracer()->GetCurrentSpan()->GetContext();
     dl_thread_jh = photon::thread_enable_join(
-        photon::thread_create11(&BKDL::bk_download_proc, dl_list, delay_sec, m_status));
+        photon::thread_create11(
+            BKDL::bk_download_proc, dl_list, delay_sec, m_status, std::move(linkContext)));
 }
 
 struct ParallelOpenTask {
@@ -437,6 +440,15 @@ ERROR_EXIT:
 }
 
 int ImageFile::init_image_file() {
+    // Extracts the trace context from the image config as a parent context.
+    // This allows us to link activity associated with overlaybd-snapshotter.
+    auto parent_context = overlaybd_otel::ExtractTraceContext(conf.traceContext());
+    auto tracer = overlaybd_otel::GetTracer();
+    opentelemetry::trace::StartSpanOptions opts;
+    opts.parent = parent_context;
+    auto span = tracer->StartSpan("ImageFile::init_image_file", opts);
+    auto scope = tracer->WithActiveSpan(span);
+    
     LSMT::IFileRO *lower_file = nullptr;
     LSMT::IFileRW *upper_file = nullptr;
     LSMT::IFileRW *stack_ret = nullptr;

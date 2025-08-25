@@ -276,11 +276,11 @@ bool BkDownload::download_blob() {
     return true;
 }
 
-void bk_download_proc(std::list<BKDL::BkDownload *> &dl_list, uint64_t delay_sec, int &running) {
+void bk_download_proc(std::list<BKDL::BkDownload *> &dl_list, uint64_t delay_sec, int &running, opentelemetry::trace::SpanContext linkContext) {
     auto tracer = overlaybd_otel::GetTracer();
     auto span = tracer->StartSpan("background_download_process");
+    span->AddLink(linkContext, {});
     auto scope = tracer->WithActiveSpan(span);
-    
     span->SetAttribute("delay_seconds", delay_sec);
     span->SetAttribute("initial_queue_size", dl_list.size());
     

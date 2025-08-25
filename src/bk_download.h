@@ -67,6 +67,6 @@ private:
     bool force_download = false;
 };
 
-void bk_download_proc(std::list<BKDL::BkDownload *> &, uint64_t, int &);
+void bk_download_proc(std::list<BKDL::BkDownload *> &, uint64_t, int &, opentelemetry::trace::SpanContext);
 
 } // namespace BKDL
