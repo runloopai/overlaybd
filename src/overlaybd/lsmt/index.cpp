@@ -256,6 +256,12 @@ public:
         }
     } alloc_blk;
 
+    // Block rewrite tracking for telemetry
+    struct rewrite_stats {
+        uint64_t total_blocks_written = 0;   // Total blocks written (in 512B units)
+        uint64_t rewritten_blocks = 0;       // Blocks that overwrote previous data
+    } m_rewrite_stats;
+
     // Index0(const set<SegmentMapping> &mapping) : mapping(mapping){};
 
     Index0(const SegmentMapping *pmappings = nullptr, size_t n = 0) {
@@ -314,6 +320,31 @@ public:
     virtual void insert(SegmentMapping m) override {
         if (m.length == 0)
             return;
+
+        // Track total blocks written for rewrite telemetry
+        m_rewrite_stats.total_blocks_written += m.length;
+
+        // Count blocks that will be overwritten (rewritten)
+        uint64_t rewritten = 0;
+        auto check_it = mapping.lower_bound(m);
+        // Check previous mapping for overlap
+        if (check_it != mapping.begin()) {
+            auto prev_it = std::prev(check_it);
+            if (prev_it->end() > m.offset) {
+                // Previous mapping overlaps with new write
+                rewritten += std::min(prev_it->end(), m.end()) - m.offset;
+            }
+        }
+        // Check current and subsequent mappings for overlap
+        for (auto it = check_it; it != mapping.end() && it->offset < m.end(); ++it) {
+            uint64_t overlap_start = std::max(it->offset, m.offset);
+            uint64_t overlap_end = std::min(it->end(), m.end());
+            if (overlap_end > overlap_start) {
+                rewritten += overlap_end - overlap_start;
+            }
+        }
+        m_rewrite_stats.rewritten_blocks += rewritten;
+
         alloc_blk += m;
         auto it = mapping.lower_bound(m);
         if (it == mapping.end()) {
@@ -367,6 +398,13 @@ public:
 
     virtual uint64_t block_count() const override {
         return alloc_blk.m_alloc;
+    }
+
+    virtual RewriteStats rewrite_stats() const override {
+        return RewriteStats{
+            m_rewrite_stats.total_blocks_written,
+            m_rewrite_stats.rewritten_blocks
+        };
     }
 
     // returns the first and last mapping in the index
