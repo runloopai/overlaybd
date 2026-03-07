@@ -98,6 +98,9 @@ public:
     struct DataStat {
         uint64_t total_data_size = -1; // size of total data
         uint64_t valid_data_size = -1; // size of valid data (excluding garbage)
+        // Block rewrite telemetry (in 512B block units)
+        uint64_t total_blocks_written = 0;  // Total blocks written
+        uint64_t rewritten_blocks = 0;      // Blocks that overwrote previous data
     };
     virtual DataStat data_stat() const = 0;
 
