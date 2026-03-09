@@ -22,6 +22,7 @@
 #include "overlaybd/cache/gzip_cache/cached_fs.h"
 #include <photon/fs/filesystem.h>
 #include <photon/common/io-alloc.h>
+#include <photon/thread/workerpool.h>
 
 using namespace photon::fs;
 
@@ -63,6 +64,7 @@ public:
     struct GlobalFs global_fs;
     std::unique_ptr<OverlayBDMetric> metrics;
     ExporterServer *exporter = nullptr;
+    photon::WorkPool *decompress_pool = nullptr;
 
 private:
     int read_global_config_and_set();

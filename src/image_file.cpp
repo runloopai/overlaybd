@@ -82,7 +82,8 @@ IFile *ImageFile::__open_ro_file(const std::string &path) {
     }
     file = tar_file;
     // set to local, no need to switch, for zfile and audit
-    ISwitchFile *switch_file = new_switch_file(file, true, path.c_str());
+    ISwitchFile *switch_file = new_switch_file(file, true, path.c_str(),
+                                               image_service.decompress_pool);
     if (!switch_file) {
         set_failed("failed to open switch file " + path);
         delete file;
@@ -182,7 +183,8 @@ IFile *ImageFile::__open_ro_remote(const std::string &dir, const std::string &di
         LOG_ERRNO_RETURN(0, nullptr, "failed to open remote file as tar file `: `", url, err_msg);
     }
 
-    ISwitchFile *switch_file = new_switch_file(tar_file, false, url.c_str());
+    ISwitchFile *switch_file = new_switch_file(tar_file, false, url.c_str(),
+                                               image_service.decompress_pool);
     if (!switch_file) {
         set_failed("failed to open switch file ", url);
         delete tar_file;

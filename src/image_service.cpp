@@ -16,6 +16,7 @@
 #include "image_service.h"
 #include "config.h"
 #include "image_file.h"
+#include <photon/photon.h>
 #include <photon/common/alog.h>
 #include <photon/common/alog-stdstring.h>
 #include <photon/common/io-alloc.h>
@@ -440,6 +441,13 @@ int ImageService::init() {
                 10000000, (uint64_t)1048576 * 4096, global_fs.io_alloc);
         }
     }
+
+    if (global_conf.decompressWorkers() > 0) {
+        decompress_pool = new photon::WorkPool(
+            global_conf.decompressWorkers(),
+            photon::INIT_EVENT_DEFAULT, photon::INIT_IO_NONE, -1);
+    }
+
     return 0;
 }
 
@@ -503,6 +511,7 @@ ImageService::~ImageService() {
     delete global_fs.srcfs;
     delete global_fs.io_alloc;
     delete exporter;
+    delete decompress_pool;
     LOG_INFO("image service is fully stopped");
 }
 

@@ -34,6 +34,7 @@
 #include <atomic>
 #include <thread>
 #include "photon/thread/thread11.h"
+#include <photon/thread/workerpool.h>
 
 using namespace photon::fs;
 
@@ -243,6 +244,7 @@ public:
     HeaderTrailer m_ht;
     IFile *m_file = nullptr;
     std::unique_ptr<ICompressor> m_compressor;
+    photon::WorkPool *m_decompress_pool = nullptr;
     bool m_ownership = false;
     uint8_t valid = FLAG_VALID_TRUE;
 
@@ -483,42 +485,63 @@ public:
             }
             int retry = 3;
         again:
-            if (m_ht.opt.verify) {
-                auto c = crc32c_salt((void *)block.buffer(), block.compressed_size);
-                if (c != block.crc32_code()) {
-                    if ((valid == FLAG_VALID_TRUE) && (retry--)) {
-                        int reload_res = block.reload();
-                        LOG_ERROR(
-                            "checksum failed {offset: `, length: `} (expected ` but got `), reload result: `",
-                            block.m_reader->m_buf_offset, block.compressed_size, HEX(block.crc32_code()).width(8),
-                            HEX(c).width(8), reload_res);
-                        if (reload_res < 0) {
-                            LOG_ERROR_RETURN(ECHECKSUM, -1,
-                                             "checksum verification and reload failed");
-                        }
-                        goto again;
-                    } else {
-                        LOG_ERROR_RETURN(
-                            ECHECKSUM, -1,
-                            "checksum verification failed after retries {offset: `, length: `}",
-                            block.m_reader->m_buf_offset, block.compressed_size);
+            int dret = -1;
+            bool crc_failed = false;
+            uint32_t crc_expected = 0, crc_actual = 0;
+
+            auto do_cpu_work = [&] {
+                if (m_ht.opt.verify) {
+                    auto c = crc32c_salt((void *)block.buffer(), block.compressed_size);
+                    if (c != block.crc32_code()) {
+                        crc_failed = true;
+                        crc_expected = block.crc32_code();
+                        crc_actual = c;
+                        return;
                     }
+                }
+                if (valid == FLAG_VALID_CRC_CHECK) {
+                    return;
+                }
+                if (block.cp_len == m_ht.opt.block_size) {
+                    dret = m_compressor->decompress(block.buffer(), block.compressed_size,
+                                                    (unsigned char *)buf, m_ht.opt.block_size);
+                } else {
+                    dret = m_compressor->decompress(block.buffer(), block.compressed_size, raw,
+                                                    m_ht.opt.block_size);
+                    if (dret != -1)
+                        memcpy(buf, raw + block.cp_begin, block.cp_len);
+                }
+            };
+
+            if (m_decompress_pool) {
+                m_decompress_pool->call(do_cpu_work);
+            } else {
+                do_cpu_work();
+            }
+
+            if (crc_failed) {
+                if ((valid == FLAG_VALID_TRUE) && (retry--)) {
+                    int reload_res = block.reload();
+                    LOG_ERROR(
+                        "checksum failed {offset: `, length: `} (expected ` but got `), reload result: `",
+                        block.m_reader->m_buf_offset, block.compressed_size, HEX(crc_expected).width(8),
+                        HEX(crc_actual).width(8), reload_res);
+                    if (reload_res < 0) {
+                        LOG_ERROR_RETURN(ECHECKSUM, -1,
+                                         "checksum verification and reload failed");
+                    }
+                    goto again;
+                } else {
+                    LOG_ERROR_RETURN(
+                        ECHECKSUM, -1,
+                        "checksum verification failed after retries {offset: `, length: `}",
+                        block.m_reader->m_buf_offset, block.compressed_size);
                 }
             }
             if (valid == FLAG_VALID_CRC_CHECK) {
                 LOG_DEBUG("only check crc32 and skip decompression.");
                 readn += block.cp_len;
                 continue;
-            }
-            int dret = -1;
-            if (block.cp_len == m_ht.opt.block_size) {
-                dret = m_compressor->decompress(block.buffer(), block.compressed_size,
-                                                (unsigned char *)buf, m_ht.opt.block_size);
-            } else {
-                dret = m_compressor->decompress(block.buffer(), block.compressed_size, raw,
-                                                m_ht.opt.block_size);
-                if (dret != -1)
-                    memcpy(buf, raw + block.cp_begin, block.cp_len);
             }
             if (dret == -1) {
                 if (retry--) {
@@ -1047,7 +1070,7 @@ bool load_jump_table(IFile *file, CompressionFile::HeaderTrailer *pheader_traile
     return true;
 }
 
-IFile *zfile_open_ro(IFile *file, bool verify, bool ownership) {
+IFile *zfile_open_ro(IFile *file, bool verify, bool ownership, photon::WorkPool *decompress_pool) {
     if (!file) {
         LOG_ERRNO_RETURN(EINVAL, nullptr, "invalid file ptr. (NULL)");
     }
@@ -1079,6 +1102,7 @@ again:
         HEX(ht.digest).width(8), ht.opt.algo, ht.opt.block_size, ht.opt.verify);
 
     zfile->m_compressor.reset(create_compressor(&args));
+    zfile->m_decompress_pool = decompress_pool;
     zfile->m_ownership = ownership;
     zfile->valid = FLAG_VALID_TRUE;
     return zfile;

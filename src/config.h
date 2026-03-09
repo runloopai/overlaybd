@@ -164,6 +164,7 @@ struct GlobalConfig : public ConfigUtils::Config {
     APPCFG_PARA(prefetchConfig, PrefetchConfig);
     APPCFG_PARA(certConfig, CertConfig);
     APPCFG_PARA(userAgent, std::string, OVERLAYBD_VERSION);
+    APPCFG_PARA(decompressWorkers, int, 4);
 };
 
 struct AuthConfig : public ConfigUtils::Config {

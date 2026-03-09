@@ -16,11 +16,13 @@
 #pragma once
 
 #include "compressor.h"
+namespace photon { class WorkPool; }
 namespace ZFile {
 const static size_t MAX_READ_SIZE = 65536; // 64K
 
 extern "C" photon::fs::IFile *zfile_open_ro(photon::fs::IFile *file, bool verify = false,
-                                            bool ownership = false);
+                                            bool ownership = false,
+                                            photon::WorkPool *decompress_pool = nullptr);
 
 extern "C" int zfile_compress(photon::fs::IFile *src_file, photon::fs::IFile *dst_file,
                               const CompressArgs *opt = nullptr);

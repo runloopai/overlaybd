@@ -36,14 +36,15 @@ using namespace photon::fs;
 
 
 // check if the `file` is zfile format
-static IFile *try_open_zfile(IFile *file, bool verify, const char *file_path) {
+static IFile *try_open_zfile(IFile *file, bool verify, const char *file_path,
+                             photon::WorkPool *decompress_pool = nullptr) {
     auto is_zfile = ZFile::is_zfile(file);
     if (is_zfile == -1) {
         LOG_ERRNO_RETURN(0, nullptr, "check file type failed.");
     }
     // open zfile
     if (is_zfile == 1) {
-        auto zf = ZFile::zfile_open_ro(file, verify, true);
+        auto zf = ZFile::zfile_open_ro(file, verify, true, decompress_pool);
         if (!zf) {
             LOG_ERRNO_RETURN(0, nullptr, "zfile_open_ro failed, path: `", file_path);
         }
@@ -59,8 +60,11 @@ public:
     IFile *m_file = nullptr;
     IFile *m_local_file = nullptr;
     std::string m_filepath;
+    photon::WorkPool *m_decompress_pool = nullptr;
 
-    SwitchFile(IFile *source, bool local = false, const char *filepath = nullptr) {
+    SwitchFile(IFile *source, bool local = false, const char *filepath = nullptr,
+               photon::WorkPool *decompress_pool = nullptr)
+        : m_decompress_pool(decompress_pool) {
         if (local)
             m_local_file = source;
         else m_file = source;
@@ -88,7 +92,7 @@ public:
             return;
         }
         file = tarfile;
-        auto zfile = try_open_zfile(file, false, m_filepath.c_str());
+        auto zfile = try_open_zfile(file, false, m_filepath.c_str(), m_decompress_pool);
         if (zfile == nullptr) {
             delete file;
             LOG_ERROR("failed to open commit file as zfile, path: `", m_filepath);
@@ -163,15 +167,16 @@ public:
     }
 };
 
-ISwitchFile *new_switch_file(IFile *source, bool local, const char *file_path) {
+ISwitchFile *new_switch_file(IFile *source, bool local, const char *file_path,
+                             photon::WorkPool *decompress_pool) {
     int retry = 1;
 again:
-    auto file = try_open_zfile(source, !local, file_path);
+    auto file = try_open_zfile(source, !local, file_path, decompress_pool);
     if (file == nullptr) {
         LOG_ERROR("failed to open source file as zfile, path: `, retry: `", file_path, retry);
         if (retry--) // may retry after cache evict
             goto again;
         return nullptr;
     }
-    return new SwitchFile(file, local, file_path);
+    return new SwitchFile(file, local, file_path, decompress_pool);
 };

@@ -16,6 +16,8 @@
 #pragma once
 #include <photon/fs/filesystem.h>
 
+namespace photon { class WorkPool; }
+
 // switch to local file after background download finished, and audit for local file pread
 // operations. if initialized with local file, only audit for pread.
 class ISwitchFile : public photon::fs::IFile {
@@ -24,5 +26,6 @@ public:
 };
 
 extern "C" ISwitchFile *new_switch_file(photon::fs::IFile *source, bool local = false,
-                                        const char *filepath = nullptr);
+                                        const char *filepath = nullptr,
+                                        photon::WorkPool *decompress_pool = nullptr);
 
