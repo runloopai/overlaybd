@@ -384,28 +384,62 @@ LSMT::IFileRW *ImageFile::open_upper(ImageConfigNS::UpperConfig &upper) {
     IFile *idx_file = NULL;
     IFile *target_file = NULL;
     LSMT::IFileRW *ret = NULL;
-    data_file = open_localfile_adaptor(upper.data().c_str(), O_RDWR, 0644);
+    int flags = O_RDWR;
+    int ioengine = image_service.global_conf.ioEngine();
+    if (ioengine > 2) {
+        LOG_WARN("invalid ioengine: `, set to psync", ioengine);
+        ioengine = 0;
+    }
+    if (ioengine != ioengine_psync) {
+        flags |= O_DIRECT;
+    }
+
+    data_file = open_localfile_adaptor(upper.data().c_str(), flags, 0644, ioengine);
     if (!data_file) {
         LOG_ERROR("open(`,flags), `:`", upper.data(), errno, strerror(errno));
         goto ERROR_EXIT;
     }
+    if (flags & O_DIRECT) {
+        auto aligned = new_aligned_file_adaptor(data_file, ALIGNMENT_4K, true, true);
+        if (!aligned) {
+            LOG_ERROR("new_aligned_file_adaptor(`) failed", upper.data());
+            goto ERROR_EXIT;
+        }
+        data_file = aligned;
+    }
 
-    idx_file = open_localfile_adaptor(upper.index().c_str(), O_RDWR, 0644);
+    idx_file = open_localfile_adaptor(upper.index().c_str(), flags, 0644, ioengine);
     if (!idx_file) {
         LOG_ERROR("open(`,flags), `:`", upper.index(), errno, strerror(errno));
         goto ERROR_EXIT;
+    }
+    if (flags & O_DIRECT) {
+        auto aligned = new_aligned_file_adaptor(idx_file, ALIGNMENT_4K, true, true);
+        if (!aligned) {
+            LOG_ERROR("new_aligned_file_adaptor(`) failed", upper.index());
+            goto ERROR_EXIT;
+        }
+        idx_file = aligned;
     }
 
     if (upper.target() != "") {
         LOG_INFO("turboOCIv1 upper layer : `, `, `, `", upper.index(), upper.data(),
                  upper.target());
-        target_file = open_localfile_adaptor(upper.target().c_str(), O_RDWR, 0644);
+        target_file = open_localfile_adaptor(upper.target().c_str(), flags, 0644, ioengine);
         if (!target_file) {
             LOG_ERROR("open(`,flags), `:`", upper.target(), errno, strerror(errno));
             goto ERROR_EXIT;
         }
+        if (flags & O_DIRECT) {
+            auto aligned = new_aligned_file_adaptor(target_file, ALIGNMENT_4K, true, true);
+            if (!aligned) {
+                LOG_ERROR("new_aligned_file_adaptor(`) failed", upper.target());
+                goto ERROR_EXIT;
+            }
+            target_file = aligned;
+        }
         if (upper.gzipIndex() != "") {
-            auto gzip_index = open_localfile_adaptor(upper.gzipIndex().c_str(), O_RDWR, 0644);
+            auto gzip_index = open_localfile_adaptor(upper.gzipIndex().c_str(), flags, 0644, ioengine);
             if (!gzip_index) {
                 LOG_ERROR("open(`,flags), `:`", upper.gzipIndex(), errno, strerror(errno));
                 goto ERROR_EXIT;
