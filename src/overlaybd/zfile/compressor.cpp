@@ -254,6 +254,23 @@ public:
         }
         return 0;
     }
+
+    virtual int decompress(const unsigned char *src, size_t src_len, unsigned char *dst,
+                           size_t dst_len) override {
+        if (dst_len < src_blk_size) {
+            LOG_ERROR_RETURN(0, -1, "dst_len (`) should be greater than compressed block size `",
+                             dst_len, src_blk_size);
+        }
+        int ret = LZ4_decompress_safe((const char *)src, (char *)dst, src_len, dst_len);
+        if (ret < 0) {
+            LOG_ERROR_RETURN(EFAULT, -1, "LZ4 decompress data failed. (retcode: `).", ret);
+        }
+        if (ret == 0) {
+            LOG_ERROR_RETURN(EFAULT, -1,
+                             "LZ4 decompress returns 0. THIS SHOULD BE NEVER HAPPEN!");
+        }
+        return ret;
+    }
 };
 
 class Compressor_zstd : public BaseCompressor {
