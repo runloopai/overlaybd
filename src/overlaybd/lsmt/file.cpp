@@ -990,8 +990,12 @@ public:
         DataStat data_stat;
         data_stat.total_data_size = (buf.st_size - HeaderTrailer::SPACE);
         data_stat.valid_data_size = index()->block_count() * ALIGNMENT;
-        LOG_DEBUG("data_size: ` ( valid: ` )", data_stat.total_data_size,
-                  data_stat.valid_data_size);
+        // Get rewrite stats from the index
+        auto rw_stats = index()->rewrite_stats();
+        data_stat.total_blocks_written = rw_stats.total_blocks_written;
+        data_stat.rewritten_blocks = rw_stats.rewritten_blocks;
+        LOG_DEBUG("data_size: ` ( valid: ` ), rewrites: `/`", data_stat.total_data_size,
+                  data_stat.valid_data_size, data_stat.rewritten_blocks, data_stat.total_blocks_written);
         return data_stat;
     }
 
