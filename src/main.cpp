@@ -293,9 +293,14 @@ protected:
         struct tcmulib_cmd *cmd;
         obd_dev *odev = (obd_dev *)tcmu_dev_get_private(dev);
         tcmulib_processing_start(dev);
+        bool got_cmd = false;
         while ((cmd = tcmulib_get_next_command(dev, 0)) != NULL) {
+            got_cmd = true;
             odev->inflight++;
             threadpool.thread_create(&handle, new handle_args{dev, cmd});
+        }
+        if (!got_cmd) {
+            photon::thread_usleep(1000);
         }
         return 0;
     }
