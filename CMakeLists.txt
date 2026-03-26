@@ -47,6 +47,7 @@ set(ENABLE_MIMIC_VDSO off)
 
 option(BUILD_CURL_FROM_SOURCE "Compile static libcurl" off)
 option(ORIGIN_EXT2FS "Use original libext2fs" off)
+option(ENABLE_REWRITE_STATS "Enable block rewrite statistics tracking (for overlaybd-commit tool)" off)
 find_package(photon REQUIRED)
 find_package(tcmu REQUIRED)
 find_package(yamlcpp)
