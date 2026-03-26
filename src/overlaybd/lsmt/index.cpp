@@ -256,11 +256,13 @@ public:
         }
     } alloc_blk;
 
+#ifdef ENABLE_REWRITE_STATS
     // Block rewrite tracking for telemetry
     struct rewrite_stats {
         uint64_t total_blocks_written = 0;   // Total blocks written (in 512B units)
         uint64_t rewritten_blocks = 0;       // Blocks that overwrote previous data
     } m_rewrite_stats;
+#endif
 
     // Index0(const set<SegmentMapping> &mapping) : mapping(mapping){};
 
@@ -278,19 +280,25 @@ public:
     virtual const SegmentMapping *buffer() const override {
         return nullptr;
     }
-    iterator remove_partial_overlap(iterator it, uint64_t offset, uint32_t length) {
+    iterator remove_partial_overlap(iterator it, uint64_t offset, uint32_t length, uint64_t *rewritten_out) {
         auto nx = next(it);
         auto end = offset + length;
         auto p = (SegmentMapping *)&*it;
+        uint64_t rewritten = 0;
+
         if (p->offset < offset) // p->offset < offset < p->end() < end
         {
             assert(p->end() > offset);
             alloc_blk -= *p;
             if (p->end() <= end) {
+                // Overlap from offset to p->end()
+                rewritten = p->end() - offset;
                 p->backward_end_to(offset);
                 alloc_blk += *p;
             } else // if (p->end() > end) // m lies in *p
             {
+                // Complete overlap - the entire new mapping overlaps with this segment
+                rewritten = length;
                 SegmentMapping nm = *p;
                 nm.forward_offset_to(end);
                 p->backward_end_to(offset); // shrink first,
@@ -302,12 +310,20 @@ public:
             alloc_blk -= *p;
             if (p->end() <= end) // included by [offset, end)
             {
+                // Entire segment is overwritten
+                rewritten = p->length;
                 mapping.erase(it);
             } else // (p->end() > end)
             {
+                // Overlap from p->offset to end
+                rewritten = end - p->offset;
                 p->forward_offset_to(end);
                 alloc_blk += *p;
             }
+        }
+
+        if (rewritten_out) {
+            *rewritten_out += rewritten;
         }
         return nx;
     }
@@ -321,29 +337,13 @@ public:
         if (m.length == 0)
             return;
 
+#ifdef ENABLE_REWRITE_STATS
         // Track total blocks written for rewrite telemetry
         m_rewrite_stats.total_blocks_written += m.length;
 
-        // Count blocks that will be overwritten (rewritten)
+        // Track blocks that will be overwritten - computed by remove_partial_overlap
         uint64_t rewritten = 0;
-        auto check_it = mapping.lower_bound(m);
-        // Check previous mapping for overlap
-        if (check_it != mapping.begin()) {
-            auto prev_it = std::prev(check_it);
-            if (prev_it->end() > m.offset) {
-                // Previous mapping overlaps with new write
-                rewritten += std::min(prev_it->end(), m.end()) - m.offset;
-            }
-        }
-        // Check current and subsequent mappings for overlap
-        for (auto it = check_it; it != mapping.end() && it->offset < m.end(); ++it) {
-            uint64_t overlap_start = std::max(it->offset, m.offset);
-            uint64_t overlap_end = std::min(it->end(), m.end());
-            if (overlap_end > overlap_start) {
-                rewritten += overlap_end - overlap_start;
-            }
-        }
-        m_rewrite_stats.rewritten_blocks += rewritten;
+#endif
 
         alloc_blk += m;
         auto it = mapping.lower_bound(m);
@@ -352,18 +352,34 @@ public:
             return;
         }
 
-        it = remove_partial_overlap(it, m.offset, m.length); // first one (there must be)
+#ifdef ENABLE_REWRITE_STATS
+        it = remove_partial_overlap(it, m.offset, m.length, &rewritten); // first one (there must be)
+#else
+        it = remove_partial_overlap(it, m.offset, m.length, nullptr); // first one (there must be)
+#endif
         assert(it == mapping.end() || it->offset > m.offset);
         while (it != mapping.end() && it->offset < m.end()) {
             if (it->end() <= m.end()) {
+#ifdef ENABLE_REWRITE_STATS
+                // Entire segment is overwritten
+                rewritten += it->length;
+#endif
                 alloc_blk -= *it;
                 it = mapping.erase(it); // middle ones, if there are
             } else {
-                it = remove_partial_overlap(it, m.offset, m.length); // last one, if there is
+#ifdef ENABLE_REWRITE_STATS
+                it = remove_partial_overlap(it, m.offset, m.length, &rewritten); // last one, if there is
+#else
+                it = remove_partial_overlap(it, m.offset, m.length, nullptr); // last one, if there is
+#endif
                 break;
             }
         }
         mapping.insert(it, m);
+
+#ifdef ENABLE_REWRITE_STATS
+        m_rewrite_stats.rewritten_blocks += rewritten;
+#endif
     }
 
     virtual size_t lookup(Segment s, /* OUT */ SegmentMapping *pm, size_t n) const override {
@@ -401,10 +417,14 @@ public:
     }
 
     virtual RewriteStats rewrite_stats() const override {
+#ifdef ENABLE_REWRITE_STATS
         return RewriteStats{
             m_rewrite_stats.total_blocks_written,
             m_rewrite_stats.rewritten_blocks
         };
+#else
+        return RewriteStats{0, 0};
+#endif
     }
 
     // returns the first and last mapping in the index
