@@ -272,16 +272,13 @@ static int push_segment(char *buf, char *data, int &data_length, int &prev_end, 
 }
 
 static int is_zero_block(char *buf, size_t n) {
-    return 1;
-    // TODO: fixme: result data error
     if (n & (sizeof(uint64_t) - 1)) {
         LOG_ERROR("buf size invalid.");
         return -1;
     }
     for (uint64_t j = 0; j < n; j += sizeof(uint64_t)) {
-        if ((uint64_t)(*(buf + j)) == (uint64_t)0)
-            continue;
-        return 1;
+        if (*(uint64_t*)(buf + j) != 0)
+            return 1;
     }
     return 0;
 }
@@ -291,7 +288,7 @@ static ssize_t pcopy(const CompactOptions &opt, const SegmentMapping &m, uint64_
     auto offset = m.moffset * ALIGNMENT;
     auto count = m.length * ALIGNMENT;
     auto bytes = 0;
-    const size_t BUFFER_SIZE = 32 * 1024;
+    const size_t BUFFER_SIZE = 4 * 1024 * 1024;
     ALIGNED_MEM4K(buf, BUFFER_SIZE);
     ALIGNED_MEM4K(data, BUFFER_SIZE);
     LOG_DEBUG("check segment: [ offset: `, len: `, moffset: `]", m.offset, m.length, m.moffset);
