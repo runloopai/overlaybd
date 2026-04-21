@@ -459,15 +459,15 @@ public:
      */
     int64_t getMetaLength(uint64_t timeout = -1) {
         photon::net::HeaderMap headers;
-        Timeout tmo(timeout);
         int retry = 3;
     again:
+        Timeout tmo(timeout);
         auto code = m_fs->GET(m_url.c_str(), &headers, -1, -1, nullptr, tmo.timeout());
         if (code != 200 && code != 206) {
-            if (tmo.expire() < photon::now)
-                LOG_ERROR_RETURN(ETIMEDOUT, -1, "Get meta timedout");
             if (retry--)
                 goto again;
+            if (tmo.expire() < photon::now)
+                LOG_ERROR_RETURN(ETIMEDOUT, -1, "Get meta timedout");
             if (code == 401 || code == 403) {
                 LOG_ERROR_RETURN(EPERM, -1, "Authorization failed");
             } else if (code == 404) {
