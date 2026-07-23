@@ -1,0 +1,16 @@
+--- a/fs/extfs/mkfs.cpp	2026-07-22 10:34:58
++++ b/fs/extfs/mkfs.cpp	2026-07-22 10:34:58
+@@ -73,6 +73,13 @@
+     ext2fs_set_feature_flex_bg(&fs_param);
+     ext2fs_set_feature_extents(&fs_param);
+     ext2fs_set_feature_extra_isize(&fs_param);
++    // Runloop: enable uninitialized block groups (gdt_csum). An offline
++    // resize2fs grow then marks new inode tables uninitialized instead of
++    // zeroing them — a near-instant grow with minimal writes into the
++    // layered (COW) block format. (metadata_csum is avoided: it seeds
++    // checksums from s_uuid, which is set after ext2fs_initialize below, so
++    // it would produce an invalid superblock checksum.)
++    ext2fs_set_feature_gdt_csum(&fs_param);
+ 
+     fs_param.s_log_cluster_size = fs_param.s_log_block_size = 2;
+     fs_param.s_desc_size = EXT2_MIN_DESC_SIZE_64BIT;
