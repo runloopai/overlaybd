@@ -1,0 +1,86 @@
+diff --git a/fs/extfs/mkfs.cpp b/fs/extfs/mkfs.cpp
+index 0195ae5..a9b88b0 100644
+--- a/fs/extfs/mkfs.cpp
++++ b/fs/extfs/mkfs.cpp
+@@ -60,11 +60,19 @@ int do_mkfs(io_manager manager, size_t size, char *uuid) {
+     memset(&fs_param, 0, sizeof(struct ext2_super_block));
+     fs_param.s_rev_level = 1;
+ 
++    // Runloop: this image is grown to the target disk size by an offline
++    // resize2fs before it is ever mounted, and it lives on a layered (COW)
++    // block format where every block the grow writes becomes a new block. The
++    // feature set below is chosen to keep that grow as close to free as
++    // possible.
+     ext2fs_set_feature_64bit(&fs_param);
+     ext2fs_set_feature_sparse_super(&fs_param);
+-    ext2fs_set_feature_sparse_super2(&fs_param);
+     ext2fs_set_feature_filetype(&fs_param);
+-    ext2fs_set_feature_resize_inode(&fs_param);
++    // Runloop: meta_bg rather than resize_inode. resize_inode reserves a
++    // contiguous GDT area that resize2fs rewrites in full on every grow —
++    // megabytes of COW churn regardless of how far the filesystem grows.
++    // meta_bg reserves nothing and extends the descriptor table in place.
++    ext2fs_set_feature_meta_bg(&fs_param);
+     ext2fs_set_feature_dir_index(&fs_param);
+     ext2fs_set_feature_xattr(&fs_param);
+     ext2fs_set_feature_dir_nlink(&fs_param);
+@@ -73,10 +81,23 @@ int do_mkfs(io_manager manager, size_t size, char *uuid) {
+     ext2fs_set_feature_flex_bg(&fs_param);
+     ext2fs_set_feature_extents(&fs_param);
+     ext2fs_set_feature_extra_isize(&fs_param);
++    // Runloop: metadata_csum marks the block groups a grow appends as
++    // uninitialized, so their inode tables are never zeroed — the grow writes
++    // descriptors and nothing else — and checksums every metadata structure,
++    // which is the only damage signal available on a filesystem carrying no
++    // journal. It seeds those checksums from s_uuid, so the seed must be
++    // re-derived once the real UUID is installed below.
++    ext2fs_set_feature_metadata_csum(&fs_param);
++    // Runloop: sparse_super2 must stay off. It places its second backup
++    // superblock in the last block group; growing the filesystem relocates
++    // that backup and frees one block too many, handing out the group's own
++    // block bitmap as free space.
+ 
+     fs_param.s_log_cluster_size = fs_param.s_log_block_size = 2;
+     fs_param.s_desc_size = EXT2_MIN_DESC_SIZE_64BIT;
+-    fs_param.s_log_groups_per_flex = 0;
++    // Runloop: 16 groups per flex group, keeping bitmaps and inode tables
++    // clustered rather than one copy per group at a fixed offset inside it.
++    fs_param.s_log_groups_per_flex = 4;
+     fs_param.s_inode_size = inode_size;
+ 
+     ext2fs_blocks_count_set(&fs_param, blocks_count);
+@@ -84,8 +105,6 @@ int do_mkfs(io_manager manager, size_t size, char *uuid) {
+     fs_param.s_inodes_count = (n > UINT_MAX) ? UINT_MAX : n;
+ 
+     ext2fs_r_blocks_count_set(&fs_param, reserved_ratio * ext2fs_blocks_count(&fs_param));
+-    fs_param.s_backup_bgs[0] = 1;
+-    fs_param.s_backup_bgs[1] = ~0;
+ 
+     ext2_filsys fs;
+     // init superblock
+@@ -96,6 +115,10 @@ int do_mkfs(io_manager manager, size_t size, char *uuid) {
+ 
+     uuid4_parse(uuid, (char*)(fs->super->s_uuid));
+     uuid4_parse(uuid, (char*)(fs_param.s_hash_seed));
++    // Runloop: metadata checksums are seeded from s_uuid, which ext2fs_initialize
++    // saw as zeroes. Re-derive the seed against the UUID just installed, before
++    // anything below writes a checksummed structure.
++    ext2fs_init_csum_seed(fs);
+     fs->super->s_kbytes_written = 1;
+     fs->super->s_def_hash_version = EXT2_HASH_HALF_MD4;
+     fs->super->s_max_mnt_count = -1;
+@@ -121,9 +144,11 @@ int do_mkfs(io_manager manager, size_t size, char *uuid) {
+         ext2fs_inode_alloc_stats2(fs, i, +1, 0);
+     ext2fs_mark_ib_dirty(fs);
+     // create resize inode
+-    ret = ext2fs_create_resize_inode(fs);
+-    if (ret) {
+-        LOG_ERRNO_RETURN(0, -1, "error creating resize inode ", VALUE(ret));
++    if (ext2fs_has_feature_resize_inode(fs->super)) {
++        ret = ext2fs_create_resize_inode(fs);
++        if (ret) {
++            LOG_ERRNO_RETURN(0, -1, "error creating resize inode ", VALUE(ret));
++        }
+     }
+ 
+     ret = ext2fs_close_free(&fs);

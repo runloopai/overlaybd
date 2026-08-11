@@ -2,12 +2,13 @@ include(FetchContent)
 set(FETCHCONTENT_QUIET false)
 set(PHOTON_ENABLE_EXTFS ON)
 
-# Runloop: patch Photon's ext4 mkfs to enable uninitialized block groups
-# (gdt_csum). This lets an offline resize2fs grow of a devbox rootfs mark new
-# inode tables uninitialized instead of zeroing them — a near-instant grow with
-# minimal writes into the layered (COW) block format.
+# Runloop: patch Photon's ext4 mkfs to lay out a devbox rootfs for the layered
+# (COW) block format it lives on. The image is baked at one size and grown to
+# the devbox's disk size by an offline resize2fs before first mount, so the
+# feature set is chosen to make that grow write as few blocks as possible while
+# leaving the result checksummed and correct.
 # Idempotent: skips if the patch is already applied (reverse-check succeeds).
-set(_photon_mkfs_patch "${CMAKE_CURRENT_LIST_DIR}/patches/photon-v0.6.17-ext4-uninit-bg.patch")
+set(_photon_mkfs_patch "${CMAKE_CURRENT_LIST_DIR}/patches/photon-v0.6.17-ext4-rootfs-format.patch")
 FetchContent_Declare(
   photon
   GIT_REPOSITORY https://github.com/alibaba/PhotonLibOS.git
