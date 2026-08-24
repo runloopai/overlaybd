@@ -1,0 +1,16 @@
+diff --git a/lib/ext2fs/expanddir.c b/lib/ext2fs/expanddir.c
+index 898a362c..d86d695e 100644
+--- a/lib/ext2fs/expanddir.c
++++ b/lib/ext2fs/expanddir.c
+@@ -185,7 +185,10 @@ static errcode_t make_indexed_dir(ext2_filsys fs, ext2_ino_t dir, struct ext2_i
+     entries = root->entries;
+     entries->block = ext2fs_cpu_to_le32(1);
+     ((struct ext2_dx_countlimit *) entries)->count = ext2fs_cpu_to_le16(1);
+-    ((struct ext2_dx_countlimit *) entries)->limit = ext2fs_cpu_to_le16((blocksize - (32 + csum_size)) / sizeof(struct ext2_dx_entry));
++    ((struct ext2_dx_countlimit *) entries)->limit = ext2fs_cpu_to_le16(
++        (blocksize - 32 -
++         (csum_size ? sizeof(struct ext2_dx_tail) : 0)) /
++        sizeof(struct ext2_dx_entry));
+ 
+     /* write out blocks */
+     for (int i = 0; i < dx_info.levels; i++)
