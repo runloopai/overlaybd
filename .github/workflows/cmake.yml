@@ -87,6 +87,13 @@ jobs:
         ls obd_mp
         sudo diff -r --exclude "lost+found" test_data obd_mp
         sudo umount obd_mp
+        mkdir -p htree_data/crowded
+        for i in $(seq 1 1000); do touch "htree_data/crowded/file-${i}"; done
+        tar -cf htree.tar -C htree_data .
+        truncate -s 1g htree.img
+        /opt/overlaybd/bin/overlaybd-apply --mkfs --raw htree.tar htree.img
+        sudo e2fsck -fn htree.img 2>&1 | tee htree-e2fsck.log || true
+        ! grep -F "invalid limit (506)" htree-e2fsck.log
     - name: E2E Test turboOCIv1
       working-directory: ${{github.workspace}}/build
       shell: bash

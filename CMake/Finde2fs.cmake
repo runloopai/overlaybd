@@ -1,10 +1,12 @@
 if(NOT ORIGIN_EXT2FS)
     message("Add and build standalone libext2fs")
     include(FetchContent)
+    set(_e2fsprogs_htree_patch "${CMAKE_CURRENT_LIST_DIR}/patches/e2fsprogs-fix-htree-root-limit.patch")
     FetchContent_Declare(
         e2fsprogs
         GIT_REPOSITORY https://github.com/data-accelerator/e2fsprogs.git
         GIT_TAG b4cf6c751196a12b1df9a269d8e0b516b99fe6a7
+        PATCH_COMMAND sh -c "git apply --reverse --check '${_e2fsprogs_htree_patch}' 2>/dev/null || git apply '${_e2fsprogs_htree_patch}'"
     )
     FetchContent_GetProperties(e2fsprogs)
 
