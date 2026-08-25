@@ -48,6 +48,9 @@ if(NOT ORIGIN_EXT2FS)
             else()
                 list(APPEND _e2fs_configure_args --host=x86_64-linux-gnu)
             endif()
+            set(_e2fs_build_env
+                "BUILD_CC=${_e2fs_build_cc}"
+                "BUILD_CFLAGS=-O2")
         endif()
 
         add_custom_command(
@@ -63,19 +66,16 @@ if(NOT ORIGIN_EXT2FS)
                 "CXX=${CMAKE_CXX_COMPILER}"
                 "AR=${CMAKE_AR}"
                 "RANLIB=${CMAKE_RANLIB}"
-                $<$<BOOL:${CMAKE_CROSSCOMPILING}>:BUILD_CC=${_e2fs_build_cc}>
-                $<$<BOOL:${CMAKE_CROSSCOMPILING}>:BUILD_CFLAGS=-O2>
+                ${_e2fs_build_env}
                 "CFLAGS=${CMAKE_C_FLAGS} -fPIC -O3"
                 "CXXFLAGS=${CMAKE_CXX_FLAGS} -fPIC -O3"
                 "${e2fsprogs_SOURCE_DIR}/configure" ${_e2fs_configure_args}
             COMMAND ${CMAKE_COMMAND} -E chdir "${LIBEXT2FS_BUILD_DIR}"
                 ${OVERLAYBD_MAKE_EXECUTABLE} -j${OVERLAYBD_SUBBUILD_JOBS}
-                $<$<BOOL:${CMAKE_CROSSCOMPILING}>:BUILD_CC=${_e2fs_build_cc}>
-                $<$<BOOL:${CMAKE_CROSSCOMPILING}>:BUILD_CFLAGS=-O2>
+                ${_e2fs_build_env}
             COMMAND ${CMAKE_COMMAND} -E chdir "${LIBEXT2FS_BUILD_DIR}"
                 ${OVERLAYBD_MAKE_EXECUTABLE} install-libs
-                $<$<BOOL:${CMAKE_CROSSCOMPILING}>:BUILD_CC=${_e2fs_build_cc}>
-                $<$<BOOL:${CMAKE_CROSSCOMPILING}>:BUILD_CFLAGS=-O2>
+                ${_e2fs_build_env}
             WORKING_DIRECTORY "${e2fsprogs_BINARY_DIR}"
             DEPENDS
                 "${e2fsprogs_SOURCE_DIR}/configure"

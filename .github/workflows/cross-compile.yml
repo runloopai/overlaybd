@@ -1,0 +1,177 @@
+name: Cross compile
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+env:
+  UBUNTU_SNAPSHOT: 20260825T200000Z
+
+jobs:
+  build:
+    name: ${{ matrix.host_arch }} to ${{ matrix.target_arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host_arch: amd64
+            target_arch: arm64
+            runner: ubuntu-24.04
+            compiler_package: gcc-aarch64-linux-gnu=4:13.2.0-7ubuntu1
+            cxx_compiler_package: g++-aarch64-linux-gnu=4:13.2.0-7ubuntu1
+            toolchain: CMake/toolchains/linux-aarch64-gnu.cmake
+            arch_flags: -march=armv8.2-a -mtune=generic
+            file_pattern: ARM aarch64
+          - host_arch: arm64
+            target_arch: amd64
+            runner: ubuntu-24.04-arm
+            compiler_package: gcc-x86-64-linux-gnu=4:13.2.0-7ubuntu1
+            cxx_compiler_package: g++-x86-64-linux-gnu=4:13.2.0-7ubuntu1
+            toolchain: CMake/toolchains/linux-x86_64-gnu.cmake
+            arch_flags: -march=x86-64-v3 -mtune=generic
+            file_pattern: x86-64
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+
+      - name: Configure pinned Ubuntu package snapshot
+        env:
+          TARGET_ARCH: ${{ matrix.target_arch }}
+        run: |
+          sudo dpkg --add-architecture "$TARGET_ARCH"
+          sudo rm -f /etc/apt/sources.list
+          sudo rm -f /etc/apt/sources.list.d/*
+          cat <<EOF | sudo tee /etc/apt/sources.list.d/ubuntu.sources
+          Types: deb
+          URIs: https://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT}
+          Suites: noble noble-updates noble-backports noble-security
+          Components: main restricted universe multiverse
+          Architectures: amd64 arm64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+          sudo apt-get update
+
+      - name: Read pinned host and target packages
+        id: packages
+        env:
+          TARGET_ARCH: ${{ matrix.target_arch }}
+          COMPILER_PACKAGE: ${{ matrix.compiler_package }}
+          CXX_COMPILER_PACKAGE: ${{ matrix.cxx_compiler_package }}
+        run: |
+          host_packages=$(xargs < .github/workflows/cross-host-packages.lock)
+          target_packages=$(awk -F= -v arch="$TARGET_ARCH" '{printf "%s:%s=%s ", $1, arch, substr($0, index($0, "=") + 1)}' .github/workflows/cross-target-packages.lock)
+          echo "packages=$host_packages $COMPILER_PACKAGE $CXX_COMPILER_PACKAGE $target_packages" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare apt archive cache
+        run: |
+          sudo rm -f /etc/apt/apt.conf.d/docker-clean
+          echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/keep-cache
+          sudo chmod 0777 /var/cache/apt/archives
+
+      - name: Cache apt archives
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: /var/cache/apt/archives
+          key: apt-noble-${{ env.UBUNTU_SNAPSHOT }}-${{ matrix.host_arch }}-${{ matrix.target_arch }}-${{ hashFiles('.github/workflows/cross-*-packages.lock') }}
+
+      - name: Install pinned cross-build packages
+        env:
+          PACKAGES: ${{ steps.packages.outputs.packages }}
+        run: |
+          # Word splitting is intentional: PACKAGES contains apt package arguments.
+          # shellcheck disable=SC2086
+          sudo apt-get install -y --allow-downgrades --no-install-recommends $PACKAGES
+
+      - name: Configure
+        env:
+          ARCH_FLAGS: ${{ matrix.arch_flags }}
+        run: |
+          cmake -S . -B build -G "Unix Makefiles" \
+            -DCMAKE_TOOLCHAIN_FILE="${{ matrix.toolchain }}" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS="$ARCH_FLAGS" \
+            -DCMAKE_CXX_FLAGS="$ARCH_FLAGS" \
+            -DBUILD_TESTING=OFF \
+            -DENABLE_DSA=OFF \
+            -DENABLE_ISAL=OFF
+
+      - name: Build at maximum parallelism
+        run: cmake --build build --parallel "$(nproc)"
+
+      - name: Verify target architecture
+        env:
+          FILE_PATTERN: ${{ matrix.file_pattern }}
+        run: |
+          file build/output/overlaybd-tcmu
+          file build/output/overlaybd-tcmu | grep -F "$FILE_PATTERN"
+
+  optional-dependencies:
+    name: Optional dependency (${{ matrix.feature }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - feature: bundled-curl
+            cmake_flags: -DBUILD_CURL_FROM_SOURCE=ON
+            target: overlaybd-tcmu
+          - feature: dsa
+            cmake_flags: -DENABLE_DSA=ON
+            target: zfile_lib
+          - feature: isa-l
+            cmake_flags: -DENABLE_ISAL=ON
+            target: zfile_lib
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+
+      - name: Configure pinned Ubuntu snapshot and apt cache
+        run: |
+          sudo rm -f /etc/apt/sources.list
+          sudo rm -f /etc/apt/sources.list.d/*
+          cat <<EOF | sudo tee /etc/apt/sources.list.d/ubuntu.sources
+          Types: deb
+          URIs: https://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT}
+          Suites: noble noble-updates noble-backports noble-security
+          Components: main restricted universe multiverse
+          Architectures: amd64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+          sudo apt-get update
+          sudo rm -f /etc/apt/apt.conf.d/docker-clean
+          echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/keep-cache
+          sudo chmod 0777 /var/cache/apt/archives
+
+      - name: Cache apt archives
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: /var/cache/apt/archives
+          key: apt-noble-${{ env.UBUNTU_SNAPSHOT }}-amd64-optional-${{ hashFiles('.github/workflows/optional-build-packages.lock') }}
+
+      - name: Install pinned build packages
+        run: xargs sudo apt-get install -y --allow-downgrades --no-install-recommends < .github/workflows/optional-build-packages.lock
+
+      - name: Configure optional dependency
+        env:
+          CMAKE_FLAGS: ${{ matrix.cmake_flags }}
+        run: |
+          # Word splitting is intentional: CMAKE_FLAGS contains CMake arguments.
+          # shellcheck disable=SC2086
+          cmake -S . -B build -G "Unix Makefiles" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=OFF \
+            $CMAKE_FLAGS
+
+      - name: Build optional dependency at maximum parallelism
+        run: cmake --build build --target "${{ matrix.target }}" --parallel "$(nproc)"

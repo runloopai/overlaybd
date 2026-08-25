@@ -83,7 +83,7 @@ if(ENABLE_ISAL)
             "CFLAGS=${CMAKE_C_FLAGS} -fPIC"
             /bin/sh ./configure ${_isal_configure_args}
         COMMAND ${CMAKE_COMMAND} -E chdir "${ISAL_BUILD_SOURCE_DIR}"
-            ${OVERLAYBD_MAKE_EXECUTABLE} -j${OVERLAYBD_SUBBUILD_JOBS}
+            ${OVERLAYBD_MAKE_EXECUTABLE} -j${OVERLAYBD_SUBBUILD_JOBS} libisal.la
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
         DEPENDS
             "${CMAKE_CURRENT_SOURCE_DIR}/isa-l/autogen.sh"
