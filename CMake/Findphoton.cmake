@@ -31,7 +31,7 @@ if (BUILD_CURL_FROM_SOURCE)
 endif()
 
 if(NOT ORIGIN_EXT2FS)
-  add_dependencies(photon_obj libext2fs)
+  add_dependencies(photon_obj E2FSPROGS::libext2fs)
 endif()
 
 set(PHOTON_INCLUDE_DIR ${photon_SOURCE_DIR}/include/)

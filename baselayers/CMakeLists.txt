@@ -1,6 +1,8 @@
 add_custom_command(
     OUTPUT ${EXECUTABLE_OUTPUT_PATH}/ext4_64
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${EXECUTABLE_OUTPUT_PATH}
     COMMAND tar -zxvf ${CMAKE_CURRENT_LIST_DIR}/ext4_64.tar.gz -C ${EXECUTABLE_OUTPUT_PATH}
+    DEPENDS ${CMAKE_CURRENT_LIST_DIR}/ext4_64.tar.gz
     VERBATIM
 )
 

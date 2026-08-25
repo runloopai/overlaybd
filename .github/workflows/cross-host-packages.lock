@@ -1,0 +1,13 @@
+autoconf=2.71-3
+automake=1:1.16.5-1.3ubuntu1
+ca-certificates=20260601~24.04.1
+cmake=3.28.3-1build7
+file=1:5.45-3build1
+gcc=4:13.2.0-7ubuntu1
+git=1:2.43.0-1ubuntu7.3
+git-man=1:2.43.0-1ubuntu7.3
+libtool=2.4.7-7build1
+make=4.3-4.1build2
+ninja-build=1.11.1-2
+pkg-config=1.8.1-2build1
+protobuf-compiler=3.21.12-8.2ubuntu0.3

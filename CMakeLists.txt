@@ -6,39 +6,56 @@ project(
 )
 enable_language(C)
 
+include(CheckCXXCompilerFlag)
+
+set(OVERLAYBD_SUBBUILD_JOBS 1 CACHE STRING
+  "Parallel jobs for nested non-CMake dependency builds")
+if(OVERLAYBD_SUBBUILD_JOBS LESS 1)
+  message(FATAL_ERROR "OVERLAYBD_SUBBUILD_JOBS must be at least 1")
+endif()
+find_program(OVERLAYBD_MAKE_EXECUTABLE NAMES gmake make)
+if(NOT OVERLAYBD_MAKE_EXECUTABLE)
+  message(FATAL_ERROR "A make implementation is required for bundled dependencies")
+endif()
+
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -DNDEBUG -g")
 
-# Get CPU arch
-execute_process(COMMAND uname -m OUTPUT_VARIABLE ARCH OUTPUT_STRIP_TRAILING_WHITESPACE)
-if (NOT (${ARCH} STREQUAL x86_64) AND NOT (${ARCH} STREQUAL aarch64) AND NOT (${ARCH} STREQUAL arm64))
-    message(FATAL_ERROR "Unknown CPU architecture ${ARCH}")
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" OVERLAYBD_SYSTEM_PROCESSOR)
+if(NOT OVERLAYBD_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|aarch64|arm64)$")
+    message(FATAL_ERROR "Unknown CPU architecture ${CMAKE_SYSTEM_PROCESSOR}")
 endif ()
 
-option(OBD_VER "Overlaybd version" "overlaybd/0.0.0-undefined")
+set(OBD_VER "overlaybd/0.0.0-undefined" CACHE STRING "Overlaybd version")
 
-set(LIBRARY_OUTPUT_PATH "${CMAKE_SOURCE_DIR}/build/output")
-set(EXECUTABLE_OUTPUT_PATH "${CMAKE_SOURCE_DIR}/build/output")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/output")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/output")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/output")
+# Retain these aliases for the existing test and packaging CMake files.
+set(LIBRARY_OUTPUT_PATH "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+set(EXECUTABLE_OUTPUT_PATH "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/CMake")
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fpic -Wall -Werror=sign-compare")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpic -Wall -Werror=sign-compare -DOVERLAYBD_VER=${OBD_VER}")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+add_compile_options(-Wall -Werror=sign-compare)
+add_compile_definitions(OVERLAYBD_VER=${OBD_VER})
 
-if (${ARCH} STREQUAL aarch64)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=armv8-a+crc -fsigned-char -fno-stack-protector -fomit-frame-pointer")
+if(OVERLAYBD_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+  set(_overlaybd_arch_flags "${CMAKE_C_FLAGS} ${CMAKE_CXX_FLAGS}")
+  if(NOT _overlaybd_arch_flags MATCHES "(^|[ ;])-m(arch|cpu)=")
+    add_compile_options(-march=armv8-a+crc)
+  endif()
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fsigned-char>
+                      $<$<COMPILE_LANGUAGE:CXX>:-fno-stack-protector>
+                      $<$<COMPILE_LANGUAGE:CXX>:-fomit-frame-pointer>)
 endif ()
 
 set(CMAKE_CXX_STANDARD_LIBRARIES "-static-libgcc ${CMAKE_CXX_STANDARD_LIBRARIES}")
-find_library(STATIC_LIBSTDC++ libstdc++.a PATHS /usr/lib/gcc/*/*)
-if(NOT ${STATIC_LIBSTDC++} STREQUAL "STATIC_LIBSTDC++-NOTFOUND")
+find_library(STATIC_LIBSTDCXX libstdc++.a)
+if(STATIC_LIBSTDCXX)
   set(CMAKE_CXX_STANDARD_LIBRARIES "-static-libstdc++ ${CMAKE_CXX_STANDARD_LIBRARIES}")
-endif()
-
-find_library(LIBZSTD libzstd.a PATHS /usr/lib/x86_64-linux-gnu/* /usr/lib64/*)
-if(${LIBZSTD} STREQUAL "LIBZSTD-NOTFOUND")
-  message("libzstd.a not found, try to find shared library")
-  find_library(LIBZSTD libzstd.so PATHS /usr/lib/x86_64-linux-gnu/* /usr/lib64/*)
 endif()
 
 set(CMAKE_CXX_STANDARD 14)
@@ -47,6 +64,11 @@ set(ENABLE_MIMIC_VDSO off)
 
 option(BUILD_CURL_FROM_SOURCE "Compile static libcurl" off)
 option(ORIGIN_EXT2FS "Use original libext2fs" off)
+option(ENABLE_DSA "Build the Intel DML crc32 backend" off)
+option(ENABLE_ISAL "Build the Intel ISA-L crc32 backend" off)
+if((ENABLE_DSA OR ENABLE_ISAL) AND NOT OVERLAYBD_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64)$")
+  message(FATAL_ERROR "ENABLE_DSA and ENABLE_ISAL are supported only on x86_64")
+endif()
 find_package(photon REQUIRED)
 find_package(tcmu REQUIRED)
 find_package(yamlcpp)

@@ -17,16 +17,53 @@ if(${BUILD_CURL_FROM_SOURCE})
         if(NOT openssl102_POPULATED)
             FetchContent_Populate(openssl102)
         endif()
+        set(OPENSSL_BUILD_SOURCE_DIR "${openssl102_BINARY_DIR}/source")
+        set(_openssl_build_signature "${openssl102_BINARY_DIR}/overlaybd-build-config")
+        file(GENERATE OUTPUT "${_openssl_build_signature}" CONTENT
+            "CC=${CMAKE_C_COMPILER}\nAR=${CMAKE_AR}\nRANLIB=${CMAKE_RANLIB}\nCFLAGS=${CMAKE_C_FLAGS}\nPROCESSOR=${OVERLAYBD_SYSTEM_PROCESSOR}\nTRIPLET=${OVERLAYBD_TARGET_TRIPLET}\n")
+        set(_openssl_configure_command sh config)
+        if(CMAKE_CROSSCOMPILING)
+            if(OVERLAYBD_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+                set(_openssl_target linux-aarch64)
+            else()
+                set(_openssl_target linux-x86_64)
+            endif()
+            set(_openssl_configure_command perl ./Configure ${_openssl_target})
+        endif()
         add_custom_command(
-            OUTPUT ${openssl102_BINARY_DIR}/lib/libssl.a
-            WORKING_DIRECTORY ${openssl102_SOURCE_DIR}
-            COMMAND
-                sh config -fPIC no-unit-test no-shared
-                --openssldir="${openssl102_BINARY_DIR}"
-                --prefix="${openssl102_BINARY_DIR}" && make depend -j && make
-                -j 8 && make install)
-        add_custom_target(openssl102_static_build
-                          DEPENDS ${openssl102_BINARY_DIR}/lib/libssl.a)
+            OUTPUT
+                ${openssl102_BINARY_DIR}/lib/libssl.a
+                ${openssl102_BINARY_DIR}/lib/libcrypto.a
+                ${openssl102_BINARY_DIR}/include/openssl/ssl.h
+            BYPRODUCTS ${openssl102_BINARY_DIR}/bin/openssl
+            COMMAND ${CMAKE_COMMAND} -E remove_directory ${OPENSSL_BUILD_SOURCE_DIR}
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${openssl102_SOURCE_DIR} ${OPENSSL_BUILD_SOURCE_DIR}
+            COMMAND ${CMAKE_COMMAND} -E chdir ${OPENSSL_BUILD_SOURCE_DIR}
+                ${CMAKE_COMMAND} -E env
+                "CC=${CMAKE_C_COMPILER}"
+                "AR=${CMAKE_AR}"
+                "RANLIB=${CMAKE_RANLIB}"
+                "CFLAGS=${CMAKE_C_FLAGS} -fPIC"
+                ${_openssl_configure_command} -fPIC no-unit-test no-shared
+                --openssldir=${openssl102_BINARY_DIR}
+                --prefix=${openssl102_BINARY_DIR}
+            COMMAND ${CMAKE_COMMAND} -E chdir ${OPENSSL_BUILD_SOURCE_DIR}
+                ${OVERLAYBD_MAKE_EXECUTABLE} depend
+            COMMAND ${CMAKE_COMMAND} -E chdir ${OPENSSL_BUILD_SOURCE_DIR}
+                ${OVERLAYBD_MAKE_EXECUTABLE} -j${OVERLAYBD_SUBBUILD_JOBS}
+            COMMAND ${CMAKE_COMMAND} -E chdir ${OPENSSL_BUILD_SOURCE_DIR}
+                ${OVERLAYBD_MAKE_EXECUTABLE} install
+            DEPENDS
+                ${openssl102_SOURCE_DIR}/Configure
+                ${openssl102_SOURCE_DIR}/config
+                "${_openssl_build_signature}"
+                "${CMAKE_CURRENT_LIST_FILE}"
+            VERBATIM)
+        add_custom_target(openssl102_static_build DEPENDS
+            ${openssl102_BINARY_DIR}/lib/libssl.a
+            ${openssl102_BINARY_DIR}/lib/libcrypto.a
+            ${openssl102_BINARY_DIR}/include/openssl/ssl.h)
         make_directory(${openssl102_BINARY_DIR}/include)
     endif()
 
@@ -49,7 +86,7 @@ if(${BUILD_CURL_FROM_SOURCE})
             PROPERTIES IMPORTED_LINK_INTERFACE_LANGUAGES "C"
                        IMPORTED_LOCATION "${OPENSSL_SSL_LIBRARY}"
                        INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIRS}"
-                       INTERFACE_LINK_LIBRARIES "${OPENSSL_SSL_LIBRARY}")
+                       INTERFACE_LINK_LIBRARIES "OpenSSL::Crypto")
     endif()
 
     if(NOT TARGET OpenSSL::Crypto)
@@ -60,7 +97,7 @@ if(${BUILD_CURL_FROM_SOURCE})
             PROPERTIES IMPORTED_LINK_INTERFACE_LANGUAGES "C"
                        IMPORTED_LOCATION "${OPENSSL_CRYPTO_LIBRARY}"
                        INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIRS}"
-                       INTERFACE_LINK_LIBRARIES "${OPENSSL_CRYPTO_LIBRARY}")
+                       INTERFACE_LINK_LIBRARIES "dl")
     endif()
 else()
     include(${CMAKE_ROOT}/Modules/FindOpenSSL.cmake)
