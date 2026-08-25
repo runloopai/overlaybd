@@ -1,0 +1,8 @@
+diff --git a/include/dml/detail/ml/buffer.hpp b/include/dml/detail/ml/buffer.hpp
+--- a/include/dml/detail/ml/buffer.hpp
++++ b/include/dml/detail/ml/buffer.hpp
+@@ -10,3 +10,4 @@
+ #include <dml/detail/ml/allocator.hpp>
+ #include <dml/detail/ml/utils.hpp>
++#include <utility>
+ #include <memory>

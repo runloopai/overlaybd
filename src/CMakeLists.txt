@@ -26,10 +26,10 @@ target_include_directories(overlaybd_image_lib PUBLIC
 target_link_libraries(overlaybd_image_lib
   photon_static
   overlaybd_lib
-  ${CURL_LIBRARIES}
-  ${OPENSSL_SSL_LIBRARY}
-  ${OPENSSL_CRYPTO_LIBRARY}
-  ${AIO_LIBRARIES}
+  CURL::libcurl
+  OpenSSL::SSL
+  OpenSSL::Crypto
+  AIO::aio
 )
 
 add_executable(overlaybd-tcmu
@@ -47,10 +47,10 @@ target_link_libraries(overlaybd-tcmu
   overlaybd_lib
   overlaybd_image_lib
   tcmu_static
-  ${CURL_LIBRARIES}
-  ${OPENSSL_SSL_LIBRARY}
-  ${OPENSSL_CRYPTO_LIBRARY}
-  ${AIO_LIBRARIES}
+  CURL::libcurl
+  OpenSSL::SSL
+  OpenSSL::Crypto
+  AIO::aio
 )
 
 install(TARGETS overlaybd-tcmu DESTINATION /opt/overlaybd/bin)

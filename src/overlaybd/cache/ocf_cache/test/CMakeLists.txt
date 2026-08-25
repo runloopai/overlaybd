@@ -11,7 +11,7 @@ target_include_directories(
 )
 target_link_libraries(
         ocf_perf_test
-        gflags pthread ${CURL_LIBRARIES}
+        gflags pthread CURL::libcurl
         photon_static overlaybd_lib
 )
 
