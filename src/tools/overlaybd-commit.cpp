@@ -188,6 +188,17 @@ int main(int argc, char **argv) {
         out = fout;
     }
 
+    // Get data stats before commit for telemetry (includes rewrite frequency)
+    auto stats = fin->data_stat();
+    LOG_INFO("data_stat: total_data_size=`, valid_data_size=`, total_blocks_written=`, rewritten_blocks=`",
+             stats.total_data_size, stats.valid_data_size,
+             stats.total_blocks_written, stats.rewritten_blocks);
+
+    // Output rewrite stats as JSON to stdout for the caller to parse
+    // Format: {"total_blocks_written": N, "rewritten_blocks": M}
+    printf("{\"total_blocks_written\": %" PRIu64 ", \"rewritten_blocks\": %" PRIu64 "}\n",
+           stats.total_blocks_written, stats.rewritten_blocks);
+
     CommitArgs args(out);
     if (!uuid.empty()) {
         memset(args.uuid.data, 0, UUID::String::LEN);

@@ -132,6 +132,12 @@ public:
     virtual IMemoryIndex *make_read_only_index() const = 0;
 };
 
+// Block rewrite statistics for telemetry
+struct RewriteStats {
+    uint64_t total_blocks_written = 0;   // Total blocks written (in 512B units)
+    uint64_t rewritten_blocks = 0;       // Blocks that overwrote previous data
+};
+
 // the level 0 memory index, which supports write
 class IMemoryIndex0 : public IMemoryIndex {
 public:
@@ -142,6 +148,9 @@ public:
     // memory allocation is aligned to the `alignment`
     virtual SegmentMapping *dump(size_t alignment = 0) const = 0;
     // virtual IMemoryIndex *make_read_only_index() const = 0;
+
+    // Get block rewrite statistics for telemetry
+    virtual RewriteStats rewrite_stats() const = 0;
 };
 
 class IComboIndex : public IMemoryIndex0 {
